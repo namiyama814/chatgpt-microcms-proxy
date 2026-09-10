@@ -26,7 +26,7 @@ Worker は microCMS MCP の tool を再実装していません。認証済み M
 | 区分 | 実装内容 |
 | --- | --- |
 | MCP OAuth | OAuth 2.1 Authorization Server、PKCE S256、RFC 9728 Protected Resource Metadata、RFC 8414 Authorization Server Metadata を実装。 |
-| Client 登録 | Client ID Metadata Document (CIMD) を優先し、Dynamic Client Registration (DCR) も互換 endpoint として提供。 |
+| Client 登録 | Dynamic Client Registration (DCR) endpoint を提供。ChatGPT の現行 CIMD は `private_key_jwt` を要求し、採用 library の CIMD public-client 制約と互換しないため DCR を使用。 |
 | GitHub 認証 | GitHub OAuth login 後、GitHub `login` が許可 username と完全一致する場合のみ token を発行。 |
 | 同意・CSRF | 初回 client 接続時の同意画面、短命 KV state、`__Host-` Secure / HttpOnly / SameSite cookie、state binding を実装。 |
 | secret 管理 | microCMS API key、GitHub OAuth credentials、cookie signing key は Cloudflare Worker Secret として登録。Git に含めない。 |

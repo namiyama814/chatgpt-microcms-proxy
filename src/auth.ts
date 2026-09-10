@@ -4,8 +4,8 @@ import type { Env } from "./types";
 const STATE_TTL_SECONDS = 600;
 const APPROVED_CLIENTS_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-type GitHubState = { oauthUrl: string };
-type ConsentState = { oauthUrl: string; username: string };
+type GitHubState = { oauthRequest: AuthRequest };
+type ConsentState = { oauthRequest: AuthRequest; username: string };
 
 function html(body: string, status = 200, headers: HeadersInit = {}, cookies: string[] = []): Response {
   const responseHeaders = new Headers({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...headers });
@@ -127,7 +127,7 @@ async function beginGitHubLogin(request: Request, env: Env): Promise<Response> {
   const oauthRequest = await parseOAuthRequest(request, env);
   if (oauthRequest instanceof Response) return oauthRequest;
   const state = crypto.randomUUID();
-  await env.OAUTH_KV.put(`github-state:${state}`, JSON.stringify({ oauthUrl: request.url } satisfies GitHubState), { expirationTtl: STATE_TTL_SECONDS });
+  await env.OAUTH_KV.put(`github-state:${state}`, JSON.stringify({ oauthRequest } satisfies GitHubState), { expirationTtl: STATE_TTL_SECONDS });
   const github = new URL("https://github.com/login/oauth/authorize");
   github.search = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, redirect_uri: githubCallbackUrl(env), state, scope: "read:user", allow_signup: "false" }).toString();
   return redirectResponse(github.toString(), {}, [await stateCookie("GITHUB_STATE", state)]);
@@ -148,13 +148,12 @@ async function handleGitHubCallback(request: Request, env: Env): Promise<Respons
   if (!username) return html("<h1>GitHub login failed</h1>", 502);
   if (username !== env.ALLOWED_GITHUB_USERNAME) return html("<h1>Access denied</h1><p>This GitHub account is not permitted to use this MCP server.</p>", 403, {}, [expireCookie("GITHUB_STATE")]);
 
-  const oauthRequest = await parseOAuthRequest(new Request(saved.oauthUrl), env);
-  if (oauthRequest instanceof Response) return oauthRequest;
+  const { oauthRequest } = saved;
   const clients = await approvedClients(request, env);
   if (clients.has(oauthRequest.clientId)) return completeAuthorization(oauthRequest, username, env, expireCookie("GITHUB_STATE"));
 
   const consentState = crypto.randomUUID();
-  await env.OAUTH_KV.put(`consent-state:${consentState}`, JSON.stringify({ oauthUrl: saved.oauthUrl, username } satisfies ConsentState), { expirationTtl: STATE_TTL_SECONDS });
+  await env.OAUTH_KV.put(`consent-state:${consentState}`, JSON.stringify({ oauthRequest, username } satisfies ConsentState), { expirationTtl: STATE_TTL_SECONDS });
   const clientName = escapeHtml(oauthRequest.clientId);
   return html(`<h1>Connect microCMS</h1><p>Allow <strong>${clientName}</strong> to use this microCMS MCP connection?</p><form method="post" action="/authorize/consent"><input type="hidden" name="state" value="${consentState}"><button type="submit">Allow</button></form>`, 200, {}, [expireCookie("GITHUB_STATE"), await stateCookie("CONSENT_STATE", consentState)]);
 }
@@ -162,7 +161,10 @@ async function handleGitHubCallback(request: Request, env: Env): Promise<Respons
 async function completeAuthorization(oauthRequest: AuthRequest, username: string, env: Env, cookie?: string): Promise<Response> {
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
     request: oauthRequest,
-    userId: `github:${username}`,
+    // workers-oauth-provider serializes authorization codes as
+    // "userId:grantId:secret".  Keep the stable user ID free of colons so the
+    // token endpoint can parse the code after ChatGPT returns from consent.
+    userId: `github-${username}`,
     metadata: { githubUsername: username },
     scope: oauthRequest.scope.filter((scope) => scope === "mcp:access"),
     props: { githubUsername: username },
@@ -178,8 +180,7 @@ async function handleConsent(request: Request, env: Env): Promise<Response> {
   await env.OAUTH_KV.delete(`consent-state:${state}`);
   if (!rawState) return html("<h1>Consent session expired</h1>", 400, {}, [expireCookie("CONSENT_STATE")]);
   const saved = JSON.parse(rawState) as ConsentState;
-  const oauthRequest = await parseOAuthRequest(new Request(saved.oauthUrl), env);
-  if (oauthRequest instanceof Response) return oauthRequest;
+  const { oauthRequest } = saved;
   const clients = await approvedClients(request, env);
   clients.add(oauthRequest.clientId);
   const completed = await completeAuthorization(oauthRequest, saved.username, env);

@@ -76,9 +76,19 @@ export async function proxyMcpRequest(request: Request, env: Env): Promise<Respo
       body: request.method === "GET" || request.method === "DELETE" ? undefined : request.body,
       redirect: "manual",
     });
-  } catch {
+  } catch (error) {
+    console.error("mcp_upstream_unavailable", {
+      method: request.method,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return new Response("Upstream MCP service is unavailable.", { status: 502 });
   }
+
+  console.log("mcp_upstream_response", {
+    method: request.method,
+    status: upstream.status,
+    contentType: upstream.headers.get("Content-Type") ?? "",
+  });
 
   return new Response(upstream.body, {
     status: upstream.status,

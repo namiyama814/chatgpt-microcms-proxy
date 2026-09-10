@@ -83,7 +83,7 @@ npx wrangler deploy
 3. GitHub にログインし、`ALLOWED_GITHUB_USERNAME` と一致するアカウントで認可します。
 4. 初回の同意画面で ChatGPT client に microCMS MCP 接続を許可します。
 
-ChatGPT は未認証 `/mcp` の 401 challenge から OAuth metadata を自動発見します。CIMD 対応 client は client ID / secret の手入力不要で、互換 client は `/oauth/register` の DCR を使えます。
+ChatGPT は未認証 `/mcp` の 401 challenge から OAuth metadata を自動発見し、`/oauth/register` の Dynamic Client Registration (DCR) で client を自動登録します。client ID / secret の手入力は不要です。
 
 ## Verify
 
