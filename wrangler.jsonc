@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chatgpt-microcms-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "vars": {
+    "MICROCMS_SERVICE_ID": "anzdrop",
+    "ALLOWED_GITHUB_USERNAME": "namiyama814",
+    "PUBLIC_ORIGIN": "https://chatgpt-microcms-proxy.namiyama814.workers.dev"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "81ebfe36c1c14266a79de706774588ef"
+    }
+  ]
+}
